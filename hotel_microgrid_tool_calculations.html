@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Hotel Microgrid Engineering Tool V11</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+body{font-family:Segoe UI,Arial;background:#eef2f8;margin:0;padding:30px;}
+.container{max-width:1500px;margin:auto;}
+.card{background:white;padding:25px;border-radius:12px;margin-bottom:20px;box-shadow:0 4px 14px rgba(0,0,0,0.08);}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.row{display:grid;grid-template-columns:200px 80px 120px 120px 1fr 60px;gap:8px;margin-bottom:6px;}
+.room{border:1px solid #ddd;padding:12px;border-radius:8px;margin-top:10px;}
+button{padding:8px 14px;border:1px solid #ccc;background:#f7f7f7;border-radius:6px;cursor:pointer;}
+.summary{font-size:18px;font-weight:bold;margin-top:10px;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th,td{border:1px solid #ccc;padding:8px;vertical-align:top;}
+th{background:#f0f4fb;}
+.lang button{margin-right:5px;}
+.calcbox{background:#f8fbff;padding:15px;border-left:4px solid #4a7bd6;margin-top:15px;line-height:1.6;}
+input,select{padding:6px;}
+.small{font-size:12px;color:#667;}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+
+<div class="card">
+<h1>Hotel Microgrid Engineering Tool</h1>
+<div>Marco Bielen – Bielen bv</div>
+
+<div class="lang">
+<button onclick="setLang('en')">ENG</button>
+<button onclick="setLang('nl')">NL</button>
+<button onclick="setLang('fr')">FR</button>
+</div>
+
+</div>
+
+<div class="card">
+
+<h2 id="energyTitle">Energy consumption by room</h2>
+
+<select id="roomType">
+<option>Guest room</option>
+<option>Kitchen</option>
+<option>Spa / Wellness</option>
+<option>Outside</option>
+<option>Technical room</option>
+<option>Storage</option>
+</select>
+
+<button onclick="addRoom()" id="addRoomBtn">Add room</button>
+
+<div id="rooms"></div>
+
+<div class="summary">
+<span id="totalLabel">Total connected load</span>: <span id="projectTotal">0</span> W
+</div>
+
+</div>
+
+<div class="card">
+
+<h2 id="outTitle">Power outages</h2>
+
+<div class="grid">
+
+<div>
+<label id="outWeekLabel">Average outages per week</label><br>
+<input id="outWeek" value="3">
+</div>
+
+<div>
+<label id="outDurLabel">Average outage duration (minutes)</label><br>
+<input id="outDur" value="60">
+</div>
+
+<div>
+<label id="outLongestLabel">Longest outage (minutes)</label><br>
+<input id="outLongest" value="120">
+</div>
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h2 id="solarTitle">Solar parameters</h2>
+
+<div class="grid">
+
+<div>
+<label id="panelPowerLabel">Panel power (W)</label><br>
+<input id="panelPower" value="445">
+</div>
+
+<div>
+<label id="stringLabel">Panels per string</label><br>
+<input id="panelsPerString" value="8">
+</div>
+
+<div>
+<label id="sunLabel">Peak sun hours Zanzibar</label><br>
+<input id="sunHours" value="6.3">
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2 id="cableTitle">Cable distances</h2>
+
+<div class="grid">
+
+<div>
+<label id="c1Label">Panels → Inverters (m)</label><br>
+<input id="d1" value="30">
+</div>
+
+<div>
+<label id="c2Label">Inverters → Batteries (m)</label><br>
+<input id="d2" value="10">
+</div>
+
+<div>
+<label id="c3Label">Batteries → Main board (m)</label><br>
+<input id="d3" value="10">
+</div>
+
+<div>
+<label id="c4Label">Main board → Sub boards total (m)</label><br>
+<input id="d4" value="50">
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h2 id="resultTitle">Engineering results</h2>
+
+<button onclick="calculate()" id="calcBtn">Run calculation</button>
+
+<table>
+<tr><th id="compLabel">Component</th><th id="resLabel">Result</th></tr>
+
+<tr><td id="loadTxt">Connected load</td><td id="loadRes"></td></tr>
+<tr><td id="batteryTxt">Battery capacity</td><td id="batteryRes"></td></tr>
+<tr><td id="pvTxt">Solar PV required</td><td id="pvRes"></td></tr>
+<tr><td id="panelTxt">Number of panels</td><td id="panelRes"></td></tr>
+<tr><td id="stringsTxt">Strings</td><td id="stringRes"></td></tr>
+<tr><td id="weeklyEnergyTxt">Weekly recharge energy</td><td id="weeklyEnergyRes"></td></tr>
+<tr><td id="dailyEnergyTxt">Daily recharge energy</td><td id="dailyEnergyRes"></td></tr>
+
+</table>
+
+<h3 id="cableReqTitle">Cable requirements</h3>
+
+<table>
+<tr><th id="routeTxt">Route</th><th id="typeTxt">Cable type</th><th id="lengthTxt">Length</th></tr>
+
+<tr>
+<td id="route1">Panels → Inverters</td>
+<td>PV1-F DC solar cable</td>
+<td id="c1"></td>
+</tr>
+
+<tr>
+<td id="route2">Inverters → Batteries</td>
+<td>AC power cable (XLPE)</td>
+<td id="c2"></td>
+</tr>
+
+<tr>
+<td id="route3">Batteries → Main board</td>
+<td>Battery DC cable</td>
+<td id="c3"></td>
+</tr>
+
+<tr>
+<td id="route4">Main board → Sub boards</td>
+<td>AC distribution cable</td>
+<td id="c4"></td>
+</tr>
+
+</table>
+
+<div class="calcbox">
+<h3 id="explainTitle">Calculation explanation</h3>
+<div id="calcExplain"></div>
+</div>
+
+</div>
+
+
+<div class="card">
+<button onclick="exportExcel()">Export Excel</button>
+<button onclick="exportPDF()">Export PDF</button>
+</div>
+
+</div>
+
+<script>
+
+let lang="en"
+
+const i18n={
+
+en:{
+energy:"Energy consumption by room",
+addRoom:"Add room",
+total:"Total connected load",
+out:"Power outages",
+solar:"Solar parameters",
+cables:"Cable distances",
+results:"Engineering results",
+calc:"Run calculation",
+weeklyEnergy:"Weekly recharge energy",
+dailyEnergy:"Daily recharge energy",
+explain:"Calculation explanation"
+},
+
+nl:{
+energy:"Energieverbruik per ruimte",
+addRoom:"Ruimte toevoegen",
+total:"Totaal vermogen",
+out:"Stroomonderbrekingen",
+solar:"Zonneparameters",
+cables:"Kabellengtes",
+results:"Technische resultaten",
+calc:"Berekening uitvoeren",
+weeklyEnergy:"Wekelijkse herlaadenergie",
+dailyEnergy:"Dagelijkse herlaadenergie",
+explain:"Uitleg berekeningen"
+},
+
+fr:{
+energy:"Consommation énergétique par pièce",
+addRoom:"Ajouter pièce",
+total:"Puissance totale",
+out:"Coupures d’électricité",
+solar:"Paramètres solaires",
+cables:"Distances de câbles",
+results:"Résultats techniques",
+calc:"Lancer calcul",
+weeklyEnergy:"Énergie hebdomadaire de recharge",
+dailyEnergy:"Énergie quotidienne de recharge",
+explain:"Explication des calculs"
+}
+
+}
+
+function setLang(l){
+
+lang=l
+let t=i18n[l]
+
+document.getElementById("energyTitle").innerText=t.energy
+document.getElementById("addRoomBtn").innerText=t.addRoom
+document.getElementById("totalLabel").innerText=t.total
+document.getElementById("outTitle").innerText=t.out
+document.getElementById("solarTitle").innerText=t.solar
+document.getElementById("cableTitle").innerText=t.cables
+document.getElementById("resultTitle").innerText=t.results
+document.getElementById("calcBtn").innerText=t.calc
+document.getElementById("weeklyEnergyTxt").innerText=t.weeklyEnergy
+document.getElementById("dailyEnergyTxt").innerText=t.dailyEnergy
+document.getElementById("explainTitle").innerText=t.explain
+
+}
+
+let rooms=[]
+let counters={}
+
+const categories=["Lamps","Airco","Fridge","Water heater","Stove","Freezer","Oven","Microwave","Pool pump"]
+
+function addRoom(){
+
+let type=document.getElementById("roomType").value
+
+if(!counters[type]) counters[type]=1
+else counters[type]++
+
+let name=type+" "+counters[type]
+
+rooms.push({
+name:name,
+items:[{category:"Lamps",qty:"",watt:"",notes:""}]
+})
+
+render()
+
+}
+
+function roomTotal(room){
+let t=0
+room.items.forEach(i=>{ t+=Number(i.qty||0)*Number(i.watt||0) })
+return t
+}
+
+function projectTotal(){
+let t=0
+rooms.forEach(r=>{ t+=roomTotal(r) })
+return t
+}
+
+function render(){
+
+let div=document.getElementById("rooms")
+div.innerHTML=""
+
+rooms.forEach((room,r)=>{
+
+let html=`<div class="room"><h3>${room.name}</h3>`
+
+room.items.forEach((item,i)=>{
+
+let total=(Number(item.qty||0)*Number(item.watt||0))
+
+html+=`
+<div class="row">
+
+<select onchange="rooms[${r}].items[${i}].category=this.value;render()">
+${categories.map(c=>`<option ${item.category==c?"selected":""}>${c}</option>`).join("")}
+</select>
+
+<input value="${item.qty}" placeholder="qty"
+oninput="rooms[${r}].items[${i}].qty=this.value;updateTotals()">
+
+<input value="${item.watt}" placeholder="watt"
+oninput="rooms[${r}].items[${i}].watt=this.value;updateTotals()">
+
+<div>${total}</div>
+
+<input value="${item.notes||''}" placeholder="notes"
+oninput="rooms[${r}].items[${i}].notes=this.value">
+
+<button onclick="rooms[${r}].items.splice(${i},1);render()">X</button>
+
+</div>
+`
+})
+
+html+=`
+
+<button onclick="rooms[${r}].items.push({category:'Lamps',qty:'',watt:'',notes:''});render()">Add category</button>
+
+<div><b>Room total:</b> ${roomTotal(room)} W</div>
+
+</div>`
+
+div.innerHTML+=html
+
+})
+
+updateTotals()
+
+}
+
+function updateTotals(){
+document.getElementById("projectTotal").innerText=projectTotal()
+}
+
+function calculate(){
+
+let load=projectTotal()/1000
+
+let outages=Number(document.getElementById("outWeek").value||0)
+let duration=Number(document.getElementById("outDur").value||0)/60
+
+let weeklyEnergy=load*duration*outages
+let dailyEnergy=weeklyEnergy/7
+let sun=Number(document.getElementById("sunHours").value||0)
+
+let pv = sun>0 ? (dailyEnergy/sun) : 0
+
+let panelPower=Number(document.getElementById("panelPower").value||0)
+let panels = panelPower>0 ? Math.ceil((pv*1000)/panelPower) : 0
+
+let panelsPerString=Number(document.getElementById("panelsPerString").value||0)
+let strings = panelsPerString>0 ? Math.ceil(panels/panelsPerString) : 0
+
+let battery=load*(Number(document.getElementById("outLongest").value||0)/60)
+
+document.getElementById("loadRes").innerText=Math.round(load*1000)+" W"
+document.getElementById("batteryRes").innerText=Math.round(battery)+" kWh"
+document.getElementById("pvRes").innerText=pv.toFixed(2)+" kWp"
+document.getElementById("panelRes").innerText=panels
+document.getElementById("stringRes").innerText=strings
+document.getElementById("weeklyEnergyRes").innerText=weeklyEnergy.toFixed(2)+" kWh/week"
+document.getElementById("dailyEnergyRes").innerText=dailyEnergy.toFixed(2)+" kWh/day"
+
+let d1=Number(document.getElementById("d1").value||0)
+let d2=Number(document.getElementById("d2").value||0)
+let d3=Number(document.getElementById("d3").value||0)
+let d4=Number(document.getElementById("d4").value||0)
+
+document.getElementById("c1").innerText=(strings*d1)+" m"
+document.getElementById("c2").innerText=d2+" m"
+document.getElementById("c3").innerText=d3+" m"
+document.getElementById("c4").innerText=d4+" m"
+
+document.getElementById("calcExplain").innerHTML=
+`
+<b>1. Connected load</b><br>
+Connected load = sum of all equipment lines = Σ(qty × watt).<br>
+Connected load = <b>${Math.round(load*1000)} W</b> = <b>${load.toFixed(2)} kW</b>.<br><br>
+
+<b>2. Energy per outage</b><br>
+Energy per outage = hotel load × average outage duration.<br>
+Average outage duration = ${duration.toFixed(2)} h.<br>
+Energy per outage = ${load.toFixed(2)} × ${duration.toFixed(2)} = <b>${(load*duration).toFixed(2)} kWh</b>.<br><br>
+
+<b>3. Weekly recharge energy</b><br>
+Weekly recharge energy = energy per outage × outages per week.<br>
+= ${(load*duration).toFixed(2)} × ${outages} = <b>${weeklyEnergy.toFixed(2)} kWh/week</b>.<br><br>
+
+<b>4. Daily recharge energy</b><br>
+Daily recharge energy = weekly recharge energy / 7.<br>
+= ${weeklyEnergy.toFixed(2)} / 7 = <b>${dailyEnergy.toFixed(2)} kWh/day</b>.<br><br>
+
+<b>5. PV size</b><br>
+PV size = daily recharge energy / peak sun hours.<br>
+= ${dailyEnergy.toFixed(2)} / ${sun.toFixed(2)} = <b>${pv.toFixed(2)} kWp</b>.<br><br>
+
+<b>6. Number of panels</b><br>
+Panels = (PV size × 1000) / panel wattage.<br>
+= (${pv.toFixed(2)} × 1000) / ${panelPower} = <b>${panels}</b> panels.<br><br>
+
+<b>7. Number of strings</b><br>
+Strings = number of panels / panels per string.<br>
+= ${panels} / ${panelsPerString} = <b>${strings}</b> string(s).<br><br>
+
+<b>8. Battery size</b><br>
+Battery size = hotel load × longest outage duration.<br>
+Longest outage = ${(Number(document.getElementById("outLongest").value||0)/60).toFixed(2)} h.<br>
+Battery = ${load.toFixed(2)} × ${(Number(document.getElementById("outLongest").value||0)/60).toFixed(2)} = <b>${battery.toFixed(2)} kWh</b>.<br><br>
+
+<b>9. Cable lengths</b><br>
+DC PV cable = number of strings × panel-to-inverter distance = ${strings} × ${d1} = <b>${strings*d1} m</b>.<br>
+Inverter-to-battery cable = <b>${d2} m</b>.<br>
+Battery-to-main-board cable = <b>${d3} m</b>.<br>
+Main-board-to-sub-boards cable = <b>${d4} m</b>.
+`
+}
+
+function getAllInputsSheet(){
+  let rows = [
+    ["Section","Field","Value"],
+    ["Power outages","Average outages per week",document.getElementById("outWeek").value],
+    ["Power outages","Average outage duration (minutes)",document.getElementById("outDur").value],
+    ["Power outages","Longest outage (minutes)",document.getElementById("outLongest").value],
+    ["Solar parameters","Panel power (W)",document.getElementById("panelPower").value],
+    ["Solar parameters","Panels per string",document.getElementById("panelsPerString").value],
+    ["Solar parameters","Peak sun hours Zanzibar",document.getElementById("sunHours").value],
+    ["Cable distances","Panels → Inverters (m)",document.getElementById("d1").value],
+    ["Cable distances","Inverters → Batteries (m)",document.getElementById("d2").value],
+    ["Cable distances","Batteries → Main board (m)",document.getElementById("d3").value],
+    ["Cable distances","Main board → Sub boards total (m)",document.getElementById("d4").value],
+  ]
+  return rows
+}
+
+function getLoadRows(){
+  let rows=[["Room","Category","Qty","Watt","Total","Notes"]]
+  rooms.forEach(r=>{
+    r.items.forEach(i=>{
+      rows.push([r.name,i.category,i.qty,i.watt,(Number(i.qty||0)*Number(i.watt||0)),i.notes||""])
+    })
+    rows.push([r.name,"ROOM TOTAL","","",roomTotal(r),""])
+  })
+  rows.push(["PROJECT TOTAL","","","",projectTotal(),""])
+  return rows
+}
+
+function getSizingRows(){
+  return [
+    ["Metric","Value"],
+    ["Connected load",document.getElementById("loadRes").innerText],
+    ["Battery capacity",document.getElementById("batteryRes").innerText],
+    ["Solar PV required",document.getElementById("pvRes").innerText],
+    ["Number of panels",document.getElementById("panelRes").innerText],
+    ["Strings",document.getElementById("stringRes").innerText],
+    ["Weekly recharge energy",document.getElementById("weeklyEnergyRes").innerText],
+    ["Daily recharge energy",document.getElementById("dailyEnergyRes").innerText],
+  ]
+}
+
+function getCableRows(){
+  return [
+    ["Route","Cable type","Length"],
+    ["Panels → Inverters","PV1-F DC solar cable",document.getElementById("c1").innerText],
+    ["Inverters → Batteries","AC power cable (XLPE)",document.getElementById("c2").innerText],
+    ["Batteries → Main board","Battery DC cable",document.getElementById("c3").innerText],
+    ["Main board → Sub boards","AC distribution cable",document.getElementById("c4").innerText],
+  ]
+}
+
+function exportExcel(){
+
+  calculate()
+
+  let wb=XLSX.utils.book_new()
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(getAllInputsSheet()), "All inputs")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(getLoadRows()), "Loads")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(getSizingRows()), "Sizing")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(getCableRows()), "Cables")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Calculation explanation"], [document.getElementById("calcExplain").innerText]]), "Calculations")
+
+  XLSX.writeFile(wb,"hotel_microgrid_study_full.xlsx")
+
+}
+
+function exportPDF(){
+
+  calculate()
+
+  const {jsPDF}=window.jspdf
+  let doc=new jsPDF()
+
+  let y=10
+  doc.setFontSize(16)
+  doc.text("Hotel Microgrid Engineering Study",10,y)
+  y+=8
+  doc.setFontSize(11)
+  doc.text("Prepared by Bielen bv",10,y)
+
+  y+=12
+  doc.setFontSize(13)
+  doc.text("1. All inputs",10,y)
+  y+=8
+  doc.setFontSize(10)
+
+  const inputs = getAllInputsSheet().slice(1)
+  inputs.forEach(r=>{
+    if(y>280){ doc.addPage(); y=10; }
+    doc.text(`${r[0]} - ${r[1]}: ${String(r[2])}`,10,y)
+    y+=6
+  })
+
+  y+=4
+  doc.setFontSize(13)
+  if(y>275){ doc.addPage(); y=10; }
+  doc.text("2. Room loads",10,y)
+  y+=8
+  doc.setFontSize(10)
+  getLoadRows().slice(1).forEach(r=>{
+    if(y>280){ doc.addPage(); y=10; }
+    doc.text(`${r[0]} | ${r[1]} | qty ${r[2]} | watt ${r[3]} | total ${r[4]} | ${r[5]||""}`,10,y)
+    y+=6
+  })
+
+  y+=4
+  if(y>275){ doc.addPage(); y=10; }
+  doc.setFontSize(13)
+  doc.text("3. Sizing results",10,y)
+  y+=8
+  doc.setFontSize(10)
+  getSizingRows().slice(1).forEach(r=>{
+    if(y>280){ doc.addPage(); y=10; }
+    doc.text(`${r[0]}: ${r[1]}`,10,y)
+    y+=6
+  })
+
+  y+=4
+  if(y>275){ doc.addPage(); y=10; }
+  doc.setFontSize(13)
+  doc.text("4. Cable list",10,y)
+  y+=8
+  doc.setFontSize(10)
+  getCableRows().slice(1).forEach(r=>{
+    if(y>280){ doc.addPage(); y=10; }
+    doc.text(`${r[0]} | ${r[1]} | ${r[2]}`,10,y)
+    y+=6
+  })
+
+  y+=4
+  if(y>260){ doc.addPage(); y=10; }
+  doc.setFontSize(13)
+  doc.text("5. Calculation explanation",10,y)
+  y+=8
+  doc.setFontSize(10)
+  const lines = doc.splitTextToSize(document.getElementById("calcExplain").innerText, 185)
+  lines.forEach(line=>{
+    if(y>280){ doc.addPage(); y=10; }
+    doc.text(line,10,y)
+    y+=5
+  })
+
+  doc.save("hotel_microgrid_report_full.pdf")
+
+}
+
+</script>
+
+</body>
+</html>
